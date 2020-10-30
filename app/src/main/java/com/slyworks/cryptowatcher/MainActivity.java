@@ -47,6 +47,7 @@ public class MainActivity extends LocationActivity implements MainScreen{
 
         mViewModel.getErrorUpdates().observe(this, errorObserver);
 
+
         getSupportFragmentManager().beginTransaction()
                 .add(new UILessFragment(),"UILessFragment").commit();
     }

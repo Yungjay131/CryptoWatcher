@@ -14,6 +14,7 @@ import com.android.volley.AuthFailureError;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.toolbox.JsonArrayRequest;
+import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +24,7 @@ import com.slyworks.cryptowatcher.screens.MainScreen;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -131,7 +133,7 @@ public class CryptoViewModel extends ViewModel {
 
 
     }
-    private  Response.Listener<JSONArray> mResponseListener = response -> {
+    private  Response.Listener</*JSONArray*/JSONObject> mResponseListener = response -> {
         writeDataToInternalStorage(response);
         ArrayList<CryptoCoinEntity> data = parseJSON(response.toString());
         Log.d(TAG, "data fetched:" + data);
@@ -169,20 +171,29 @@ public class CryptoViewModel extends ViewModel {
         if (mQueue == null)
             mQueue = Volley.newRequestQueue(mAppContext);
 
-        final JsonArrayRequest jsonObjReq =
-                new JsonArrayRequest(ENDPOINT_FETCH_CRYPTO_DATA,
+        final /*JsonArrayRequest*/ JsonObjectRequest jsonObjReq =
+                new /*JsonArrayRequest*/ JsonObjectRequest(ENDPOINT_FETCH_CRYPTO_DATA,
                         response -> {
                             Log.e(TAG, "Thread->" +
                                                Thread.currentThread().getName()+"\tGot some network response");
                             writeDataToInternalStorage(response);
-                            final ArrayList<CryptoCoinEntity> data = parseJSON(response.toString());
-                            List<CoinModel> mappedData = mapEntityToModel(data);
-                            mDataApi.setValue(mappedData);
+                            final ArrayList<CryptoCoinEntity> data;
+                            try {
+                                data = parseJSON(/*response.toString()*/response.getString("data"));
+                                List<CoinModel> mappedData = mapEntityToModel(data);
+                                mDataApi.setValue(mappedData);
+                            } catch (JSONException e) {
+                                e.printStackTrace();
+                            }
+
                         },
                         error -> {
                             Log.e(TAG, "Thread->" +
                                                Thread.currentThread().getName()+"\tGot network error");
                             mError.setValue(error.toString());
+
+                            Log.e(TAG, "fetchData: error:->"+error.toString());
+
                             mExecutor.execute(() -> {
                                 try {
                                     Log.e(TAG, "Thread->"+ Thread.currentThread().getName()+
@@ -193,8 +204,9 @@ public class CryptoViewModel extends ViewModel {
                                     mDataApi.postValue(mappedData);
                                 } catch (JSONException e) {
                                     e.printStackTrace();
-                                }
-                            });}){
+                                } catch(Exception e){
+                                    e.printStackTrace();
+                                }                            });}){
                         @Override
                         public Map<String, String> getHeaders() throws AuthFailureError {
                             HashMap<String, String> headers = new HashMap<String, String>();
@@ -219,13 +231,15 @@ public class CryptoViewModel extends ViewModel {
             if (mView!=null)
                 mView.setError(e.getMessage());
             e.printStackTrace();
+
+            Log.e(TAG, "parseJSON: "+ e);
         }
         return data;
     }
     //////////////////////////////////////////////////////////////////////////////////////STORAGE CODE///////////////////////////////////////////////////////////////////////////////////////////
     String DATA_FILE_NAME = "crypto.data";
 
-    private void writeDataToInternalStorage(JSONArray data) {
+    private void writeDataToInternalStorage(/*JSONArray*/ JSONObject data) {
         FileOutputStream fos = null;
         try {
             fos = mAppContext.openFileOutput(DATA_FILE_NAME, Context.MODE_PRIVATE);
